@@ -1,5 +1,5 @@
 # Shopee - Price Match Guarantee 
-[Shopee - Price Match Guarantee](https://www.kaggle.com/c/shopee-product-matching/overview) challenge is to find similar images for each group.<br>
+[Shopee - Price Match Guarantee](https://www.kaggle.com/c/shopee-product-matching/overview) challenge is to find similar images for each group.<br> I participated in this challenge from 2021-05-03 to 2021-05-11.
 
 ## Data
 the training set metadata. Each row contains the data for a single posting. Multiple postings might have the exact same image ID, but with different titles or vice versa.
