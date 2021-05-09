@@ -10,7 +10,6 @@ from metric import CurricularFace
 
 
 class ShopeeModel(nn.Module):
-
     def __init__(
         self,
         model_name='nfnet',
@@ -18,6 +17,7 @@ class ShopeeModel(nn.Module):
         fc_dim=512,
         margin=0.5,
         scale=30,
+        mode='arcface',
         use_fc=True,
         pretrained=True):
 
@@ -46,7 +46,17 @@ class ShopeeModel(nn.Module):
             self._init_params()
             final_in_features = fc_dim
 
-        self.final = CurricularFace(final_in_features,
+        if mode == 'arcface':
+            self.final = ArcMarginProduct(
+                final_in_features,
+                n_classes,
+                scale = scale,
+                margin = margin,
+                easy_margin = False,
+                ls_eps = 0.0
+            )
+        else:
+            self.final = CurricularFace(final_in_features,
                                            n_classes,
                                            s=scale,
                                            m=margin)
@@ -73,60 +83,46 @@ class ShopeeModel(nn.Module):
             x = self.bn(x)
         return x
 
-'''
+
 class ArcMarginProduct(nn.Module):
-    def __init__(self, in_features, out_features, s=30.0, m=0.5,
-                 crit="bce", reduction="mean", easy_margin=False, ls_eps=0.0):
-        super().__init__()
+    def __init__(self, in_features, out_features, scale=30.0, margin=0.50, easy_margin=False, ls_eps=0.0):
+        super(ArcMarginProduct, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.weight = Parameter(torch.FloatTensor(out_features, in_features))
+        self.scale = scale
+        self.margin = margin
+        self.ls_eps = ls_eps  # label smoothing
+        self.weight = nn.Parameter(torch.FloatTensor(out_features, in_features))
         nn.init.xavier_uniform_(self.weight)
-        self.reduction = reduction
+
         self.easy_margin = easy_margin
-        self.ls_eps = ls_eps
-        
-        if crit == "focal":
-            self.crit = FocalLoss(gamma=args.focal_loss_gamma)
-        elif crit == "bce":
-            self.crit = nn.CrossEntropyLoss(reduction="none")   
+        self.cos_m = math.cos(margin)
+        self.sin_m = math.sin(margin)
+        self.th = math.cos(math.pi - margin)
+        self.mm = math.sin(math.pi - margin) * margin
 
-        if s is None:
-            self.s = torch.nn.Parameter(torch.tensor([30.], requires_grad=True, device='cuda'))
-        else:
-            self.s = s
-        self.m = m
-        self.cos_m = math.cos(m)
-        self.sin_m = math.sin(m)
-        self.th = math.cos(math.pi - m)
-        self.mm = math.sin(math.pi - m) * m
-
-    def forward(self, logits, labels):
-        cosine = F.linear(F.normalize(logits), F.normalize(self.weight))
-        sine = torch.sqrt(((1.0 + 1e-7) - torch.pow(cosine, 2)).clamp(0, 1))
+    def forward(self, input, label):
+        # --------------------------- cos(theta) & phi(theta) ---------------------------
+        cosine = F.linear(F.normalize(input), F.normalize(self.weight))
+        sine = torch.sqrt(1.0 - torch.pow(cosine, 2))
         phi = cosine * self.cos_m - sine * self.sin_m
         if self.easy_margin:
             phi = torch.where(cosine > 0, phi, cosine)
         else:
             phi = torch.where(cosine > self.th, phi, cosine - self.mm)
-
-        onehot = torch.zeros_like(cosine)
-        onehot.scatter_(1, labels.view(-1, 1).long(), 1)
+        # --------------------------- convert label to one-hot ---------------------------
+        # one_hot = torch.zeros(cosine.size(), requires_grad=True, device='cuda')
+        one_hot = torch.zeros(cosine.size(), device='cuda')
+        one_hot.scatter_(1, label.view(-1, 1).long(), 1)
         if self.ls_eps > 0:
             one_hot = (1 - self.ls_eps) * one_hot + self.ls_eps / self.out_features
-        output = (onehot * phi) + ((1.0 - onehot) * cosine)
-        output *= self.s
+        # -------------torch.where(out_i = {x_i if condition_i else y_i) -------------
+        output = (one_hot * phi) + ((1.0 - one_hot) * cosine)
+        output *= self.scale
 
-        loss = self.crit(output, labels)
-        
-        if self.reduction == "mean":
-            loss = loss.mean()
-        elif self.reduction == "sum":
-            loss = loss.sum()
+        return output, nn.CrossEntropyLoss()(output,label)
 
-        return output, loss
-
-
+'''
 class GeM(nn.Module):
     def __init__(self, p=3, eps=1e-6):
         super(GeM,self).__init__()
