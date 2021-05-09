@@ -30,7 +30,7 @@ parser.add_argument('--submission_dir', dest='submission_dir', default="./public
 
 # Base
 parser.add_argument('--model_dir', dest='model_dir', default="./ckpt/")
-#parser.add_argument('--resume', dest='resume', default=None)
+parser.add_argument('--resume', dest='resume', default=None)
 parser.add_argument('--max_size', dest='max_size', type=int, default=512)
 parser.add_argument('--image_size', dest='image_size', type=int, default=512)
 parser.add_argument('--epochs', dest='epochs', type=int, default=15)
@@ -123,11 +123,12 @@ def run_train():
         A.Resize(args.image_size, args.image_size),
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
+        A.Rotate(limit=120, p=0.8),
         #A.Cutout(p=0.5),
-        A.OneOf([
-            A.HueSaturationValue(),
-            A.ShiftScaleRotate()
-        ], p=1),
+        #A.OneOf([
+        #    A.HueSaturationValue(),
+        #    A.ShiftScaleRotate()
+        #], p=1),
         A.RandomBrightness(limit=(0.09, 0.6), p=0.5),
         A.Normalize(mean=[0.485, 0.456, 0.406],
                      std=[0.229, 0.224, 0.225]),
@@ -137,8 +138,7 @@ def run_train():
     test_transform = A.Compose([
         A.Resize(args.image_size, args.image_size),
         #A.CenterCrop(args.image_size, args.image_size, p=1.),
-        A.Normalize(mean=[0.485, 0.456, 0.406],
-                     std=[0.229, 0.224, 0.225]),
+        A.Normalize(),
         ToTensorV2(p=1.0),
     ])
 
@@ -156,7 +156,7 @@ def run_train():
                         fc_dim=args.feat_dim,
                         scale=args.s,
                         margin=args.m,
-                        crit=args.crit,
+                        #crit=args.crit,
                         use_fc=args.use_fc,
                         pretrained=args.pretrained)
     model.cuda()
@@ -165,6 +165,8 @@ def run_train():
     new_layer = Mish()
     # in eca_nfnet_l0 SiLU() is used, but it will be replace by Mish()
     model = replace_activations(model, existing_layer, new_layer)
+    if args.resume is not None:
+        model.load_state_dict(torch.load(os.path.join(args.model_dir, args.resume)))
     
     optimizer = Ranger(model.parameters(), lr = scheduler_params['lr_start'])
     scheduler = ShopeeScheduler(optimizer, **scheduler_params)

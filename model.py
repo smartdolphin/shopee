@@ -6,8 +6,74 @@ from torch import nn
 from torch.nn import Conv2d, AdaptiveAvgPool2d, Linear
 from torch.nn.parameter import Parameter
 from loss import FocalLoss
+from metric import CurricularFace
 
 
+class ShopeeModel(nn.Module):
+
+    def __init__(
+        self,
+        model_name='nfnet',
+        n_classes=11014,
+        fc_dim=512,
+        margin=0.5,
+        scale=30,
+        use_fc=True,
+        pretrained=True):
+
+        super(ShopeeModel,self).__init__()
+        print('Building Model Backbone for {} model'.format(model_name))
+
+        self.backbone = timm.create_model(model_name, pretrained=pretrained)
+
+        if 'efficientnet' in model_name:
+            final_in_features = self.backbone.classifier.in_features
+            self.backbone.classifier = nn.Identity()
+            self.backbone.global_pool = nn.Identity()
+        elif 'nfnet' in model_name:
+            final_in_features = self.backbone.head.fc.in_features
+            self.backbone.head.fc = nn.Identity()
+            self.backbone.head.global_pool = nn.Identity()
+
+        self.pooling =  nn.AdaptiveAvgPool2d(1)
+
+        self.use_fc = use_fc
+
+        if use_fc:
+            self.dropout = nn.Dropout(p=0.0)
+            self.fc = nn.Linear(final_in_features, fc_dim)
+            self.bn = nn.BatchNorm1d(fc_dim)
+            self._init_params()
+            final_in_features = fc_dim
+
+        self.final = CurricularFace(final_in_features,
+                                           n_classes,
+                                           s=scale,
+                                           m=margin)
+
+    def _init_params(self):
+        nn.init.xavier_normal_(self.fc.weight)
+        nn.init.constant_(self.fc.bias, 0)
+        nn.init.constant_(self.bn.weight, 1)
+        nn.init.constant_(self.bn.bias, 0)
+
+    def forward(self, image, label):
+        feature = self.extract_feat(image)
+        logits = self.final(feature,label)
+        return logits
+
+    def extract_feat(self, x):
+        batch_size = x.shape[0]
+        x = self.backbone(x)
+        x = self.pooling(x).view(batch_size, -1)
+
+        if self.use_fc:
+            x = self.dropout(x)
+            x = self.fc(x)
+            x = self.bn(x)
+        return x
+
+'''
 class ArcMarginProduct(nn.Module):
     def __init__(self, in_features, out_features, s=30.0, m=0.5,
                  crit="bce", reduction="mean", easy_margin=False, ls_eps=0.0):
@@ -137,3 +203,4 @@ class ShopeeModel(nn.Module):
             x = self.neck(x)
         logits = self.final(x, label)
         return logits
+'''
