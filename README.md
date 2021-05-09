@@ -1,6 +1,14 @@
 # Shopee - Price Match Guarantee 
 [Shopee - Price Match Guarantee](https://www.kaggle.com/c/shopee-product-matching/overview) challenge is to find similar images for each group.<br> I participated in this challenge from 2021-05-03 to 2021-05-11.
 
+## Summary of approach
+__Private score: ?__ / __Public score: 0.734 (entered top 9%)__
+
+## Architecture
+* nfnet-l0 + efficientnet-b5 + tfidf + transformer (arcface)
+* threshold finding
+* feature merge strategy
+
 ## Data
 the training set metadata. Each row contains the data for a single posting. Multiple postings might have the exact same image ID, but with different titles or vice versa.
 * Num. of train : 34,250
