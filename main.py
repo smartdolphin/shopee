@@ -1,3 +1,8 @@
+# Reference kaggle kernel notebook
+# https://www.kaggle.com/parthdhameliya77/shopee-pytorch-eca-nfnet-l0-image-training
+# https://www.kaggle.com/parthdhameliya77/pytorch-eca-nfnet-l0-image-tfidf-inference
+# https://www.kaggle.com/tanulsingh077/metric-learning-pipeline-only-text-sbert
+
 # coding: utf-8
 import pandas as pd
 import numpy as np
